@@ -1,5 +1,11 @@
 // Virtual Photobooth Image Composition Engine for HTML5 Canvas
 
+// Helper: Check if video element is ready with frame dimensions to draw on canvas
+export function isVideoReadyToDraw(video) {
+  if (!video) return false;
+  return (video.readyState >= 1 || video.videoWidth > 0) && (video.videoWidth > 0);
+}
+
 // Helper: Center crop & draw image/video with aspect ratio preservation (object-fit: cover)
 export function drawCover(ctx, source, dx, dy, dWidth, dHeight, mirror = false) {
   if (!source) return;
@@ -149,7 +155,7 @@ export async function renderLayoutToCanvas({
 
     // Draw Right Frame (Remote)
     ctx.fillRect(pad * 2 + cardW - 4, pad - 4, cardW + 8, cardH + 8);
-    if (remoteVideo && remoteVideo.readyState >= 2) {
+    if (isVideoReadyToDraw(remoteVideo)) {
       drawCover(ctx, remoteVideo, pad * 2 + cardW, pad, cardW, cardH, isRemoteMirrored);
     } else {
       drawDisconnectedPlaceholder(ctx, pad * 2 + cardW, pad, cardW, cardH, remoteName);
@@ -190,7 +196,7 @@ export async function renderLayoutToCanvas({
     // Bottom Frame (Remote)
     const y2 = pad * 2 + frameH;
     ctx.fillRect(pad - 4, y2 - 4, frameW + 8, frameH + 8);
-    if (remoteVideo && remoteVideo.readyState >= 2) {
+    if (isVideoReadyToDraw(remoteVideo)) {
       drawCover(ctx, remoteVideo, pad, y2, frameW, frameH, isRemoteMirrored);
     } else {
       drawDisconnectedPlaceholder(ctx, pad, y2, frameW, frameH, remoteName);
@@ -229,7 +235,7 @@ export async function renderLayoutToCanvas({
       ctx.fillRect(pad - 2, fy - 2, frameW + 4, frameH + 4);
 
       const item = sources[i];
-      if (item.src && (item.src === localVideo || item.src.readyState >= 2)) {
+      if (item.src && (item.src === localVideo || isVideoReadyToDraw(item.src))) {
         drawCover(ctx, item.src, pad, fy, frameW, frameH, item.mirror);
       } else {
         drawDisconnectedPlaceholder(ctx, pad, fy, frameW, frameH, item.label);
@@ -278,7 +284,7 @@ export async function renderLayoutToCanvas({
     ctx.fillRect(cardX - 16, cardY2 - 16, cardW + 32, cardH + 32);
     ctx.fillStyle = '#000000';
     ctx.fillRect(cardX, cardY2, cardW, cardH);
-    if (remoteVideo && remoteVideo.readyState >= 2) {
+    if (isVideoReadyToDraw(remoteVideo)) {
       drawCover(ctx, remoteVideo, cardX, cardY2, cardW, cardH, isRemoteMirrored);
     } else {
       drawDisconnectedPlaceholder(ctx, cardX, cardY2, cardW, cardH, remoteName);
@@ -328,7 +334,7 @@ export async function renderLayoutToCanvas({
     ctx.fillRect(tv2X - 180, tv2Y - 25, tv2W + 180, tv2H + 50);
     ctx.fillStyle = '#000000';
     ctx.fillRect(tv2X, tv2Y, tv2W, tv2H);
-    if (remoteVideo && remoteVideo.readyState >= 2) {
+    if (isVideoReadyToDraw(remoteVideo)) {
       drawCover(ctx, remoteVideo, tv2X, tv2Y, tv2W, tv2H, isRemoteMirrored);
     } else {
       drawDisconnectedPlaceholder(ctx, tv2X, tv2Y, tv2W, tv2H, remoteName);
@@ -367,7 +373,7 @@ export async function renderLayoutToCanvas({
     // Split inner frame into two side-by-side or collage
     const subW = (frameW - 30) / 2;
     drawCover(ctx, localVideo, pad + 10, pad + 10, subW, frameH - 20, isLocalMirrored);
-    if (remoteVideo && remoteVideo.readyState >= 2) {
+    if (isVideoReadyToDraw(remoteVideo)) {
       drawCover(ctx, remoteVideo, pad + subW + 20, pad + 10, subW, frameH - 20, isRemoteMirrored);
     } else {
       drawDisconnectedPlaceholder(ctx, pad + subW + 20, pad + 10, subW, frameH - 20, remoteName);
@@ -410,7 +416,7 @@ export async function renderLayoutToCanvas({
     // Split LCD between both participants!
     const halfH = screenH / 2;
     drawCover(ctx, localVideo, screenX, screenY, screenW, halfH - 2, isLocalMirrored);
-    if (remoteVideo && remoteVideo.readyState >= 2) {
+    if (isVideoReadyToDraw(remoteVideo)) {
       drawCover(ctx, remoteVideo, screenX, screenY + halfH + 2, screenW, halfH - 2, isRemoteMirrored);
     } else {
       drawDisconnectedPlaceholder(ctx, screenX, screenY + halfH + 2, screenW, halfH - 2, remoteName);

@@ -583,9 +583,11 @@ export default function PhotoboothRoom({
               ref={remoteVideoRef}
               autoPlay
               playsInline
+              muted={!micOn}
               className={`w-full h-full object-cover ${remoteStream ? 'block' : 'hidden'}`}
               onLoadedMetadata={() => {
                 if (remoteVideoRef.current) {
+                  remoteVideoRef.current.play().catch(console.warn);
                   console.log(`[WEBRTC] [Room: ${room.roomCode}] [Participant: ${user.id}] Remote video dimensions:`, {
                     width: remoteVideoRef.current.videoWidth,
                     height: remoteVideoRef.current.videoHeight
