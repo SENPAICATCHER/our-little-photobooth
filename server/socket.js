@@ -131,6 +131,33 @@ export function setupSocket(io) {
       }
     });
 
+    // Query active room state on component mount
+    socket.on('get-room-state', (callback) => {
+      if (!currentRoomCode) {
+        return callback?.({ success: false, error: 'Not in a room.' });
+      }
+      const roomData = activeRooms.get(currentRoomCode);
+      if (!roomData) {
+        return callback?.({ success: false, error: 'Room data not found.' });
+      }
+      const participantsList = Array.from(roomData.participants.values()).map(p => ({
+        socketId: p.socketId,
+        userId: p.userId,
+        displayName: p.displayName,
+        isReady: p.isReady,
+        isOwner: p.isOwner,
+        cameraOn: p.cameraOn,
+        micOn: p.micOn
+      }));
+      const payload = {
+        participants: participantsList,
+        layout: roomData.layout,
+        filter: roomData.filter
+      };
+      callback?.({ success: true, ...payload });
+      socket.emit('room-state-updated', payload);
+    });
+
     // WebRTC Signaling
     socket.on('peer-camera-ready', (data) => {
       if (currentRoomCode) {

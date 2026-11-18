@@ -8,7 +8,8 @@ export default function LandingPage({
   invitedRoomCode = '', 
   invitedToken = '', 
   invitedHostName = '', 
-  invitedError = '' 
+  invitedError = '',
+  onClearInvite
 }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(Boolean(invitedRoomCode && !invitedError));
@@ -113,31 +114,89 @@ export default function LandingPage({
           </p>
 
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2">
-            <button
-              onClick={() => {
-                playButtonPop();
-                setErrorMsg('');
-                setShowCreateModal(true);
-              }}
-              className="retro-btn retro-btn-primary w-full sm:w-auto text-base md:text-lg px-8 py-3.5 flex items-center justify-center gap-2 font-bold cursor-pointer"
-            >
-              <Camera className="w-5 h-5" />
-              <span>Create a Room</span>
-            </button>
+          {invitedRoomCode && !invitedError ? (
+            <div className="space-y-3 pt-2">
+              <div className="p-4 bg-[#FAF5FF] border-2 border-[#1E1B24] rounded-2xl shadow-[4px_4px_0px_#1E1B24] max-w-md">
+                <div className="flex items-center gap-2 font-bold text-sm text-[#7E22CE] mb-1">
+                  <span>💌</span>
+                  <span>{invitedHostName ? `${invitedHostName} invited you to Photobooth!` : 'Photobooth Invitation'}</span>
+                </div>
+                <p className="text-xs text-gray-600 mb-3">
+                  Room: <strong className="font-mono text-purple-700">{invitedRoomCode}</strong>
+                </p>
+                <button
+                  onClick={() => {
+                    playButtonPop();
+                    setErrorMsg('');
+                    setShowJoinModal(true);
+                  }}
+                  className="retro-btn retro-btn-pink w-full py-3 text-base font-bold flex items-center justify-center gap-2 cursor-pointer shadow-[3px_3px_0px_#1E1B24]"
+                >
+                  <Users className="w-5 h-5" />
+                  <span>Join {invitedHostName ? `${invitedHostName}'s` : ''} Photobooth</span>
+                </button>
+              </div>
+              <div className="text-xs text-gray-500 text-center lg:text-left">
+                Want to host instead?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    playButtonPop();
+                    onClearInvite?.();
+                    setShowCreateModal(true);
+                  }}
+                  className="underline text-purple-700 font-semibold cursor-pointer"
+                >
+                  Create a new room
+                </button>
+              </div>
+            </div>
+          ) : invitedError ? (
+            <div className="p-4 bg-red-50 border-2 border-red-500 rounded-2xl shadow-[4px_4px_0px_#EF4444] max-w-md space-y-3">
+              <div className="flex items-center gap-2 font-bold text-sm text-red-700">
+                <span>⚠️</span>
+                <span>Invitation Issue</span>
+              </div>
+              <p className="text-xs text-red-600">{invitedError}</p>
+              <button
+                onClick={() => {
+                  playButtonPop();
+                  onClearInvite?.();
+                  setShowCreateModal(true);
+                }}
+                className="retro-btn retro-btn-primary w-full py-2.5 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Camera className="w-4 h-4" />
+                <span>Start Your Own Photobooth</span>
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2">
+              <button
+                onClick={() => {
+                  playButtonPop();
+                  setErrorMsg('');
+                  setShowCreateModal(true);
+                }}
+                className="retro-btn retro-btn-primary w-full sm:w-auto text-base md:text-lg px-8 py-3.5 flex items-center justify-center gap-2 font-bold cursor-pointer"
+              >
+                <Camera className="w-5 h-5" />
+                <span>Create a Room</span>
+              </button>
 
-            <button
-              onClick={() => {
-                playButtonPop();
-                setErrorMsg('');
-                setShowJoinModal(true);
-              }}
-              className="retro-btn retro-btn-secondary w-full sm:w-auto text-base md:text-lg px-8 py-3.5 flex items-center justify-center gap-2 font-bold cursor-pointer"
-            >
-              <Users className="w-5 h-5 text-[#9333EA]" />
-              <span>Join with Code</span>
-            </button>
-          </div>
+              <button
+                onClick={() => {
+                  playButtonPop();
+                  setErrorMsg('');
+                  setShowJoinModal(true);
+                }}
+                className="retro-btn retro-btn-secondary w-full sm:w-auto text-base md:text-lg px-8 py-3.5 flex items-center justify-center gap-2 font-bold cursor-pointer"
+              >
+                <Users className="w-5 h-5 text-[#9333EA]" />
+                <span>Join with Code</span>
+              </button>
+            </div>
+          )}
 
           {/* Privacy & Feature Highlights */}
           <div className="pt-4 flex flex-wrap items-center justify-center lg:justify-start gap-4 text-xs md:text-sm text-[#6B7280]">
@@ -348,30 +407,41 @@ export default function LandingPage({
 
             <form onSubmit={handleJoinSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#374151] mb-1.5">
-                  Room Code
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#374151]">
+                    Room Code
+                  </label>
+                  {invitedRoomCode && (
+                    <span className="text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full border border-green-300">
+                      ✓ Linked from Invitation
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   placeholder="e.g. RETRO-99"
                   value={roomCode}
-                  onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                  className="retro-input w-full uppercase font-mono tracking-wider"
-                  autoFocus
+                  onChange={(e) => !invitedRoomCode && setRoomCode(e.target.value.toUpperCase())}
+                  readOnly={Boolean(invitedRoomCode)}
+                  className={`retro-input w-full uppercase font-mono tracking-wider ${
+                    invitedRoomCode ? 'bg-gray-100 border-gray-400 cursor-not-allowed text-gray-700' : ''
+                  }`}
+                  autoFocus={!invitedRoomCode}
                   required
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-[#374151] mb-1.5">
-                  Your Name
+                  Your Name / Nickname
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Paulene"
+                  placeholder="e.g. Paulene or Mawkin"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   className="retro-input w-full"
+                  autoFocus={Boolean(invitedRoomCode)}
                   required
                 />
               </div>

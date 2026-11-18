@@ -121,7 +121,7 @@ export async function renderLayoutToCanvas({
   localVideo,
   remoteVideo,
   localName = 'You',
-  remoteName = 'Paulene',
+  remoteName = 'Partner',
   customCaption = '',
   dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
   isLocalMirrored = true,

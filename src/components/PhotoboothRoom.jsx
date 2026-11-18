@@ -46,6 +46,7 @@ export default function PhotoboothRoom({
   const remoteVideoRef = useRef(null);
   const captureCanvasRef = useRef(null);
   const webrtcManagerRef = useRef(null);
+  const isCapturingRef = useRef(false);
 
   // Initialize WebRTC and Local Camera
   useEffect(() => {
@@ -72,6 +73,10 @@ export default function PhotoboothRoom({
               localVideoRef.current.srcObject = stream;
               localVideoRef.current.play().catch(console.warn);
             }
+          }
+
+          if (socket && socket.updateLocalStream) {
+            socket.updateLocalStream(stream);
           }
 
           if (socket && socket.init) {
@@ -185,6 +190,11 @@ export default function PhotoboothRoom({
   // Socket Event Listeners for Signaling and Photobooth Synchronization
   useEffect(() => {
     if (!socket) return;
+
+    // Immediately request current room state in case remote partner joined before us
+    if (socket.emit) {
+      socket.emit('get-room-state');
+    }
 
     // Room state updated
     socket.on('room-state-updated', ({ participants, layout, filter }) => {
@@ -323,36 +333,52 @@ export default function PhotoboothRoom({
 
   // Execute Photo Capture via Canvas
   const executePhotoCapture = async () => {
-    const canvas = captureCanvasRef.current;
-    const localVideo = localVideoRef.current;
-    const remoteVideo = remoteVideoRef.current;
-    if (!canvas || !localVideo) return;
+    if (isCapturingRef.current) return;
+    isCapturingRef.current = true;
 
-    await renderLayoutToCanvas({
-      canvas,
-      layoutId: selectedLayout,
-      localVideo,
-      remoteVideo,
-      localName: user.displayName,
-      remoteName: remoteParticipant ? remoteParticipant.displayName : 'Paulene',
-      isLocalMirrored: mirrorLocal,
-      isRemoteMirrored: false
-    });
+    try {
+      const canvas = captureCanvasRef.current;
+      const localVideo = localVideoRef.current;
+      const remoteVideo = remoteVideoRef.current;
+      if (!canvas || !localVideo) {
+        console.warn('[PHOTOBOOTH] Canvas or localVideo element not ready for capture');
+        return;
+      }
 
-    const capturedDataUrl = canvas.toDataURL('image/png', 0.95);
+      const effectiveRemoteName = remoteParticipant?.displayName || (user.isOwner ? 'Guest' : 'Host');
 
-    // Birthday confetti burst!
-    confetti({
-      particleCount: 50,
-      spread: 60,
-      origin: { y: 0.7 }
-    });
+      await renderLayoutToCanvas({
+        canvas,
+        layoutId: selectedLayout,
+        localVideo,
+        remoteVideo,
+        localName: user.displayName,
+        remoteName: effectiveRemoteName,
+        isLocalMirrored: mirrorLocal,
+        isRemoteMirrored: false
+      });
 
-    // Pass captured image to editor
-    onCaptureCompleted({
-      dataUrl: capturedDataUrl,
-      layout: selectedLayout
-    });
+      const capturedDataUrl = canvas.toDataURL('image/png', 0.95);
+
+      // Birthday confetti burst!
+      confetti({
+        particleCount: 50,
+        spread: 60,
+        origin: { y: 0.7 }
+      });
+
+      // Pass captured image to editor
+      onCaptureCompleted({
+        dataUrl: capturedDataUrl,
+        layout: selectedLayout
+      });
+    } catch (err) {
+      console.error('[PHOTOBOOTH] Capture execution error:', err);
+    } finally {
+      setTimeout(() => {
+        isCapturingRef.current = false;
+      }, 1000);
+    }
   };
 
   // Toggle Camera
@@ -412,6 +438,15 @@ export default function PhotoboothRoom({
   // Start Synchronized Countdown
   const handleTriggerCountdown = () => {
     playButtonPop();
+    if (countdownRemaining !== null || isCapturingRef.current) return;
+
+    if (!remoteParticipant || !remoteStream) {
+      const proceed = window.confirm(
+        "Your partner's camera is not connected yet!\n\nDo you want to take a solo photo now, or wait for them?"
+      );
+      if (!proceed) return;
+    }
+
     socket.emit('start-countdown', { seconds: countdownDuration });
   };
 
@@ -576,7 +611,7 @@ export default function PhotoboothRoom({
             </button>
           </div>
 
-          {/* REMOTE USER CAMERA (PAULENE / FRIEND) */}
+          {/* REMOTE USER CAMERA (PARTNER) */}
           <div className="retro-card overflow-hidden bg-black flex flex-col relative aspect-4/3 shadow-[6px_6px_0px_#1E1B24]">
             {/* Always keep the video element mounted in the DOM to avoid ref/autoplay race conditions */}
             <video
@@ -584,7 +619,7 @@ export default function PhotoboothRoom({
               autoPlay
               playsInline
               muted={!micOn}
-              className={`w-full h-full object-cover ${remoteStream ? 'block' : 'hidden'}`}
+              className="w-full h-full object-cover"
               onLoadedMetadata={() => {
                 if (remoteVideoRef.current) {
                   remoteVideoRef.current.play().catch(console.warn);
@@ -598,12 +633,14 @@ export default function PhotoboothRoom({
 
             {!remoteStream && (
               /* Waiting for remote peer invitation card */
-              <div className="absolute inset-0 bg-[#1E1B24] flex flex-col items-center justify-center text-center p-6 text-white scanlines">
+              <div className="absolute inset-0 z-10 bg-[#1E1B24] flex flex-col items-center justify-center text-center p-6 text-white scanlines">
                 <div className="w-16 h-16 rounded-2xl bg-[#E9D5FF] text-[#1E1B24] flex items-center justify-center text-3xl mb-4 border-2 border-white">
                   💌
                 </div>
                 <h3 className="font-bold text-lg mb-1">
-                  {remoteParticipant ? `Connecting to ${remoteParticipant.displayName}...` : 'Waiting for Paulene'}
+                  {remoteParticipant 
+                    ? `Connecting to ${remoteParticipant.displayName}...` 
+                    : (user.isOwner ? 'Waiting for Guest to Connect' : 'Waiting for Host to Connect')}
                 </h3>
                 <p className="text-xs text-gray-300 max-w-xs mb-4">
                   {remoteParticipant 
@@ -622,18 +659,10 @@ export default function PhotoboothRoom({
               </div>
             )}
 
-            {/* Remote Label */}
+            {/* Remote Video Footer Label */}
             {remoteStream && (
               <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-xs px-3 py-1 rounded-full border border-black shadow text-xs font-bold text-[#1E1B24] flex items-center gap-1.5 z-20">
-                <span>{remoteParticipant ? remoteParticipant.displayName : 'Paulene'}</span>
-                {remoteParticipant?.isReady && <span className="text-green-600">✓ Ready</span>}
-              </div>
-            )}
-
-            {/* Remote Label */}
-            {remoteStream && (
-              <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-xs px-3 py-1 rounded-full border border-black shadow text-xs font-bold text-[#1E1B24] flex items-center gap-1.5">
-                <span>{remoteParticipant ? remoteParticipant.displayName : 'Paulene'}</span>
+                <span>{remoteParticipant?.displayName || (user.isOwner ? 'Guest' : 'Host')}</span>
                 {remoteParticipant?.isReady && <span className="text-green-600">✓ Ready</span>}
               </div>
             )}

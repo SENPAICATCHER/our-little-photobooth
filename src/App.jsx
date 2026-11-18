@@ -49,6 +49,7 @@ function parseInvitationParams() {
 }
 
 export default function App() {
+  const initialInvitation = parseInvitationParams();
   const [currentView, setCurrentView] = useState('landing'); // 'landing' | 'room'
   const [room, setRoom] = useState(null);
   const [user, setUser] = useState(null);
@@ -56,9 +57,9 @@ export default function App() {
   const [photos, setPhotos] = useState([]);
   const [backendMode, setBackendMode] = useState('checking'); // 'node' | 'p2p' | 'checking'
   
-  // Invitation Link State
-  const [invitedRoomCode, setInvitedRoomCode] = useState('');
-  const [invitedToken, setInvitedToken] = useState('');
+  // Invitation Link State initialized immediately from URL params to prevent race conditions
+  const [invitedRoomCode, setInvitedRoomCode] = useState(initialInvitation.roomCode);
+  const [invitedToken, setInvitedToken] = useState(initialInvitation.token);
   const [invitedHostName, setInvitedHostName] = useState('');
   const [invitedError, setInvitedError] = useState('');
 
@@ -68,6 +69,20 @@ export default function App() {
   const [showStripGenerator, setShowStripGenerator] = useState(false);
 
   const socketRef = useRef(null);
+
+  // Helper: Read active session for a specific room or current room
+  const getSavedSession = (targetRoomCode) => {
+    try {
+      const activeCode = targetRoomCode || sessionStorage.getItem('olpb_current_room');
+      if (activeCode) {
+        const raw = sessionStorage.getItem(`olpb_session_${activeCode}`) || sessionStorage.getItem('olpb_active_session');
+        if (raw) return JSON.parse(raw);
+      }
+    } catch (e) {
+      console.warn('Error reading saved session:', e);
+    }
+    return null;
+  };
 
   // Auto-detect backend availability and handle initial URL / session restoration on mount
   useEffect(() => {
@@ -110,18 +125,10 @@ export default function App() {
       if (isCancelled) return;
       setBackendMode(detectedMode);
 
-      // 2. Check for existing active session in sessionStorage (handles browser refresh)
-      const savedSessionRaw = sessionStorage.getItem('olpb_active_session');
-      let restoredSession = null;
-      if (savedSessionRaw) {
-        try {
-          restoredSession = JSON.parse(savedSessionRaw);
-        } catch (e) {
-          sessionStorage.removeItem('olpb_active_session');
-        }
-      }
+      // 2. Check for existing active session in sessionStorage scoped to the room
+      const restoredSession = getSavedSession(urlCode);
 
-      // If user refreshed while inside a room and the URL matches (or no conflicting URL):
+      // If user refreshed while inside a room and the URL matches:
       if (restoredSession && (!urlCode || urlCode === restoredSession.roomCode)) {
         console.log('🔄 Restoring active session from sessionStorage for room:', restoredSession.roomCode);
         await restoreActiveSession(restoredSession, detectedMode, activeSocket);
@@ -129,31 +136,8 @@ export default function App() {
       }
 
       // 3. If there is an invitation code in the URL but no active session, validate the room
-      if (urlCode && detectedMode === 'node') {
-        try {
-          const query = urlToken ? `?token=${encodeURIComponent(urlToken)}` : '';
-          const res = await fetch(`/api/rooms/${urlCode}${query}`);
-          const data = await res.json();
-
-          if (isCancelled) return;
-
-          if (res.status === 404) {
-            setInvitedError(`Photobooth room "${urlCode}" does not exist. Please check your invitation link.`);
-          } else if (res.status === 410) {
-            setInvitedError(data.error || 'This photobooth room has expired or been closed.');
-          } else if (res.status === 403) {
-            setInvitedError('Invalid invitation token for this room.');
-          } else if (data.success && data.room) {
-            if (data.room.isFull) {
-              setInvitedError(`Room "${urlCode}" is currently full (maximum 2 participants).`);
-            } else {
-              setInvitedHostName(data.room.ownerName || 'Host');
-              setInvitedToken(data.room.inviteToken || urlToken);
-            }
-          }
-        } catch (err) {
-          console.warn('Error pre-validating invitation link:', err);
-        }
+      if (urlCode) {
+        await validateRoom(urlCode, urlToken, detectedMode);
       }
     }
 
@@ -204,14 +188,16 @@ export default function App() {
               setCurrentView('room');
               fetchPhotos(joinedRoom.roomCode, 'node');
             } else {
-              sessionStorage.removeItem('olpb_active_session');
+              sessionStorage.removeItem(`olpb_session_${session.roomCode}`);
+              sessionStorage.removeItem('olpb_current_room');
               setInvitedError(joinRes?.error || 'Could not rejoin room after refresh.');
               setCurrentView('landing');
             }
           });
           return;
         } else {
-          sessionStorage.removeItem('olpb_active_session');
+          sessionStorage.removeItem(`olpb_session_${session.roomCode}`);
+          sessionStorage.removeItem('olpb_current_room');
           setInvitedError(data.error || 'Previous session expired.');
           setCurrentView('landing');
           return;
@@ -275,14 +261,81 @@ export default function App() {
     return `${prefix}-${num}`;
   };
 
-  // Create a Room
-  const handleCreateRoom = async (ownerName) => {
+  // =========================================================================
+  // SEPARATE, STRICTLY DEFINED ROOM OPERATIONS
+  // 1. validateRoom(roomCode, token)
+  // 2. createRoom(ownerName)
+  // 3. joinRoom(roomCode, token, displayName)
+  // 4. leaveRoom(roomCode)
+  // =========================================================================
+
+  // OPERATION 1: validateRoom(roomCode, token)
+  const validateRoom = async (code, token = '', mode = backendMode) => {
+    if (!code) return { valid: false, error: 'No room code provided.' };
+    const normalizedCode = code.trim().toUpperCase();
+
+    if (mode === 'node') {
+      try {
+        const query = token ? `?token=${encodeURIComponent(token)}` : '';
+        const res = await fetch(`/api/rooms/${normalizedCode}${query}`);
+        const data = await res.json();
+
+        if (res.status === 404) {
+          const err = `Photobooth room "${normalizedCode}" does not exist. Please check your invitation link.`;
+          setInvitedError(err);
+          return { valid: false, error: err };
+        }
+        if (res.status === 410) {
+          const err = data.error || 'This photobooth room has expired or been closed.';
+          setInvitedError(err);
+          return { valid: false, error: err };
+        }
+        if (res.status === 403) {
+          const err = 'Invalid invitation token for this room.';
+          setInvitedError(err);
+          return { valid: false, error: err };
+        }
+        if (data.success && data.room) {
+          if (data.room.isFull) {
+            const err = `Room "${normalizedCode}" is currently full (maximum 2 participants).`;
+            setInvitedError(err);
+            return { valid: false, error: err };
+          }
+          setInvitedHostName(data.room.ownerName || 'Host');
+          setInvitedToken(data.room.inviteToken || token);
+          setInvitedError('');
+          return { valid: true, room: data.room };
+        }
+      } catch (err) {
+        console.warn('Network error during room validation:', err);
+      }
+    }
+
+    // P2P / Serverless mode validation
+    if (/^[A-Z0-9-]+$/i.test(normalizedCode)) {
+      setInvitedError('');
+      return { valid: true, room: { roomCode: normalizedCode, inviteToken: token } };
+    }
+    const err = `Invalid room code format: "${normalizedCode}"`;
+    setInvitedError(err);
+    return { valid: false, error: err };
+  };
+
+  // OPERATION 2: createRoom(ownerName)
+  // Only called when user explicitly creates a room. NEVER called on join!
+  const createRoom = async (ownerName) => {
+    const trimmedName = (ownerName || '').trim();
+    if (!trimmedName) {
+      alert('Please enter your name.');
+      return;
+    }
+
     if (backendMode === 'node') {
       try {
         const res = await fetch('/api/rooms', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ownerName })
+          body: JSON.stringify({ ownerName: trimmedName })
         });
         const data = await res.json();
 
@@ -290,12 +343,12 @@ export default function App() {
           const newRoom = data.room;
           const newUser = {
             id: newRoom.ownerId,
-            displayName: ownerName,
+            displayName: trimmedName,
             isOwner: true
           };
 
-          // Save active session for refresh persistence
-          sessionStorage.setItem('olpb_active_session', JSON.stringify({
+          // Save scoped active session for refresh persistence
+          sessionStorage.setItem(`olpb_session_${newRoom.roomCode}`, JSON.stringify({
             roomCode: newRoom.roomCode,
             roomId: newRoom.id,
             userId: newUser.id,
@@ -304,6 +357,7 @@ export default function App() {
             inviteToken: newRoom.inviteToken,
             backendMode: 'node'
           }));
+          sessionStorage.setItem('olpb_current_room', newRoom.roomCode);
 
           // Update URL without triggering reload
           const tokenPart = newRoom.inviteToken ? `&token=${encodeURIComponent(newRoom.inviteToken)}` : '';
@@ -331,25 +385,20 @@ export default function App() {
           return;
         } else {
           alert(data.error || 'Could not create room.');
+          return;
         }
       } catch (err) {
-        console.error('Node create room failed:', err);
-        fallbackCreateRoomP2P(ownerName);
+        console.error('Node create room failed, falling back to P2P:', err);
       }
-    } else {
-      // P2P Netlify Mode
-      fallbackCreateRoomP2P(ownerName);
     }
-  };
 
-  // P2P Room Creation Fallback
-  const fallbackCreateRoomP2P = async (ownerName) => {
+    // P2P Netlify Mode
     setBackendMode('p2p');
     const code = generateLocalRoomCode();
     const token = Math.random().toString(36).substring(2, 10);
     const newUser = {
       id: `user-${Date.now()}`,
-      displayName: ownerName,
+      displayName: trimmedName,
       isOwner: true
     };
     const newRoom = {
@@ -360,7 +409,7 @@ export default function App() {
       status: 'active'
     };
 
-    sessionStorage.setItem('olpb_active_session', JSON.stringify({
+    sessionStorage.setItem(`olpb_session_${code}`, JSON.stringify({
       roomCode: code,
       roomId: newRoom.id,
       userId: newUser.id,
@@ -369,6 +418,7 @@ export default function App() {
       inviteToken: token,
       backendMode: 'p2p'
     }));
+    sessionStorage.setItem('olpb_current_room', code);
 
     window.history.replaceState({}, '', `${window.location.pathname}?join=${encodeURIComponent(code)}&token=${encodeURIComponent(token)}`);
 
@@ -389,9 +439,20 @@ export default function App() {
     fetchPhotos(code, 'p2p');
   };
 
-  // Join an Existing Room
-  const handleJoinRoom = async (roomCode, displayName, token = invitedToken) => {
-    const normalizedCode = roomCode.trim().toUpperCase();
+  // OPERATION 3: joinRoom(roomCode, token, displayName)
+  // Strictly joins existing room, NEVER creates a new room!
+  const joinRoom = async (roomCode, token = invitedToken, displayName = '') => {
+    const normalizedCode = (roomCode || '').trim().toUpperCase();
+    const trimmedName = (displayName || '').trim();
+
+    if (!normalizedCode) {
+      alert('Please provide a valid room code.');
+      return;
+    }
+    if (!trimmedName) {
+      alert('Please enter your name.');
+      return;
+    }
 
     if (backendMode === 'node') {
       try {
@@ -399,7 +460,7 @@ export default function App() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            displayName,
+            displayName: trimmedName,
             token
           })
         });
@@ -409,8 +470,8 @@ export default function App() {
           const joinedRoom = { ...data.room, inviteToken: token || data.room.inviteToken };
           const joinedUser = data.user;
 
-          // Save active session for refresh persistence
-          sessionStorage.setItem('olpb_active_session', JSON.stringify({
+          // Save scoped active session for refresh persistence
+          sessionStorage.setItem(`olpb_session_${joinedRoom.roomCode}`, JSON.stringify({
             roomCode: joinedRoom.roomCode,
             roomId: joinedRoom.id,
             userId: joinedUser.id,
@@ -419,6 +480,7 @@ export default function App() {
             inviteToken: token,
             backendMode: 'node'
           }));
+          sessionStorage.setItem('olpb_current_room', joinedRoom.roomCode);
 
           const tokenPart = token ? `&token=${encodeURIComponent(token)}` : '';
           window.history.replaceState({}, '', `${window.location.pathname}?join=${encodeURIComponent(joinedRoom.roomCode)}${tokenPart}`);
@@ -440,7 +502,8 @@ export default function App() {
                 setCurrentView('room');
                 fetchPhotos(joinedRoom.roomCode, 'node');
               } else {
-                sessionStorage.removeItem('olpb_active_session');
+                sessionStorage.removeItem(`olpb_session_${joinedRoom.roomCode}`);
+                sessionStorage.removeItem('olpb_current_room');
                 alert(joinRes?.error || 'Could not join room.');
               }
             });
@@ -456,11 +519,11 @@ export default function App() {
       }
     }
 
-    // P2P Netlify Join Mode
+    // P2P Netlify Join Mode (Strict join to existing roomCode, NEVER creates a new room)
     setBackendMode('p2p');
     const newUser = {
       id: `user-${Date.now()}`,
-      displayName,
+      displayName: trimmedName,
       isOwner: false
     };
     const joinedRoom = {
@@ -470,7 +533,7 @@ export default function App() {
       isOwner: false
     };
 
-    sessionStorage.setItem('olpb_active_session', JSON.stringify({
+    sessionStorage.setItem(`olpb_session_${normalizedCode}`, JSON.stringify({
       roomCode: normalizedCode,
       roomId: joinedRoom.id,
       userId: newUser.id,
@@ -479,6 +542,7 @@ export default function App() {
       inviteToken: token,
       backendMode: 'p2p'
     }));
+    sessionStorage.setItem('olpb_current_room', normalizedCode);
 
     const tokenPart = token ? `&token=${encodeURIComponent(token)}` : '';
     window.history.replaceState({}, '', `${window.location.pathname}?join=${encodeURIComponent(normalizedCode)}${tokenPart}`);
@@ -500,11 +564,15 @@ export default function App() {
     fetchPhotos(normalizedCode, 'p2p');
   };
 
-  // Leave Room
-  const handleLeaveRoom = () => {
+  // OPERATION 4: leaveRoom(roomCode)
+  const leaveRoom = (roomCode = room?.roomCode) => {
     if (socket) {
       if (socket.disconnect) socket.disconnect();
     }
+    if (roomCode) {
+      sessionStorage.removeItem(`olpb_session_${roomCode}`);
+    }
+    sessionStorage.removeItem('olpb_current_room');
     sessionStorage.removeItem('olpb_active_session');
     window.history.replaceState({}, '', window.location.pathname);
     setRoom(null);
@@ -630,12 +698,19 @@ export default function App() {
       {/* LANDING PAGE VIEW */}
       {currentView === 'landing' && (
         <LandingPage
-          onCreateRoom={handleCreateRoom}
-          onJoinRoom={handleJoinRoom}
+          onCreateRoom={createRoom}
+          onJoinRoom={(code, name, token) => joinRoom(code, token, name)}
           invitedRoomCode={invitedRoomCode}
           invitedToken={invitedToken}
           invitedHostName={invitedHostName}
           invitedError={invitedError}
+          onClearInvite={() => {
+            setInvitedRoomCode('');
+            setInvitedToken('');
+            setInvitedHostName('');
+            setInvitedError('');
+            window.history.replaceState({}, '', window.location.pathname);
+          }}
         />
       )}
 
@@ -646,7 +721,7 @@ export default function App() {
           user={user}
           socket={socket}
           isP2P={backendMode === 'p2p'}
-          onLeaveRoom={handleLeaveRoom}
+          onLeaveRoom={() => leaveRoom(room?.roomCode)}
           onCaptureCompleted={(captured) => setCapturedData(captured)}
           onOpenGallery={() => setShowGallery(true)}
           photoCount={photos.length}

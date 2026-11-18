@@ -35,6 +35,7 @@ export class PeerRoomSignaler {
     this.peer = null;
     this.connection = null;
     this.mediaCall = null;
+    this.pendingIncomingCall = null;
     this.listeners = new Map(); // event -> Set of callbacks
     this.remoteStream = null;
     this.localStream = null;
@@ -42,6 +43,14 @@ export class PeerRoomSignaler {
     this.countdownTimer = null;
     this.isReady = false;
     this.peerIsReady = false;
+    this.peerParticipant = null;
+    this.isDestroyed = false;
+
+    // Release Peer ID promptly when tab or browser closes
+    this.unloadHandler = () => this.disconnect();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', this.unloadHandler);
+    }
   }
 
   log(action, details = {}) {
@@ -92,6 +101,26 @@ export class PeerRoomSignaler {
   // Handle outgoing events from UI
   emit(event, data = {}) {
     this.log(`Outgoing emit: ${event}`, data);
+
+    // Query room state
+    if (event === 'get-room-state') {
+      if (this.peerParticipant) {
+        this.emitLocal('room-state-updated', {
+          participants: [
+            {
+              userId: this.user.id,
+              displayName: this.user.displayName,
+              isReady: this.isReady,
+              isOwner: this.isHost,
+              cameraOn: true,
+              micOn: false
+            },
+            this.peerParticipant
+          ]
+        });
+      }
+      return;
+    }
 
     // 1. Synchronized countdown logic
     if (event === 'start-countdown') {
@@ -153,6 +182,31 @@ export class PeerRoomSignaler {
     this.sendRemote(event, data);
   }
 
+  // Update local stream (if camera changes or is enabled)
+  updateLocalStream(stream) {
+    this.localStream = stream;
+    if (this.pendingIncomingCall) {
+      this.log('Answering pending incoming call with newly acquired local stream');
+      this.pendingIncomingCall.answer(stream);
+      this.setupMediaCall(this.pendingIncomingCall);
+      this.pendingIncomingCall = null;
+    }
+    if (this.mediaCall && this.mediaCall.peerConnection) {
+      try {
+        const videoTrack = stream.getVideoTracks()[0];
+        const senders = this.mediaCall.peerConnection.getSenders();
+        const vSender = senders.find(s => s.track && s.track.kind === 'video');
+        if (vSender && videoTrack) {
+          vSender.replaceTrack(videoTrack).catch(err => {
+            this.log('Error replacing video track on call', { error: err.message });
+          });
+        }
+      } catch (err) {
+        this.log('Warning updating stream track on call', { error: err.message });
+      }
+    }
+  }
+
   // Initialize P2P connection
   async init(localStream, onRemoteStream) {
     this.localStream = localStream;
@@ -181,16 +235,20 @@ export class PeerRoomSignaler {
 
           // Handle incoming media call
           this.peer.on('call', (call) => {
-            this.log('Incoming call received on host, answering with local stream');
-            call.answer(this.localStream);
-            this.setupMediaCall(call);
+            this.log('Incoming call received on host');
+            if (this.localStream) {
+              call.answer(this.localStream);
+              this.setupMediaCall(call);
+            } else {
+              this.log('Local stream not ready yet, staging call to answer upon stream acquisition');
+              this.pendingIncomingCall = call;
+            }
           });
 
           this.peer.on('error', (err) => {
             this.log('Host Peer error', { type: err.type, error: err.message });
             if (err.type === 'unavailable-id') {
-              // ID collision or reloaded: retry with clean session
-              this.log('Peer ID already in use, cleaning up');
+              this.log('Host Peer ID already in use on cloud broker. Reusing session.');
               resolve(true);
             } else {
               reject(err);
@@ -205,32 +263,51 @@ export class PeerRoomSignaler {
             config: { iceServers: PEER_ICE_SERVERS }
           });
 
-          this.peer.on('call', (call) => {
-            this.log('Incoming call received on guest, answering with local stream');
-            call.answer(this.localStream);
-            this.setupMediaCall(call);
-          });
+          let connectionAttemptTimer = null;
+          let retryCount = 0;
+          const maxRetries = 15; // Retry for up to 30 seconds if host is still loading
 
-          this.peer.on('open', (myId) => {
-            this.log('Guest Peer registered on cloud', { hostPeerId: targetPeerId, myId });
+          const connectToHost = () => {
+            if (this.isDestroyed || !this.peer || this.peer.destroyed) return;
+            this.log(`Connecting to host: ${targetPeerId} (Attempt ${retryCount + 1}/${maxRetries})`);
             const conn = this.peer.connect(targetPeerId, {
               reliable: true
             });
             this.setupDataConnection(conn);
 
-            // Call host once data connection is opened or immediately if stream available
             if (this.localStream) {
               this.log('Calling host with local media stream', { targetPeerId });
               const call = this.peer.call(targetPeerId, this.localStream);
               this.setupMediaCall(call);
             }
+          };
 
+          this.peer.on('call', (call) => {
+            this.log('Incoming call received on guest, answering with local stream');
+            if (this.localStream) {
+              call.answer(this.localStream);
+              this.setupMediaCall(call);
+            } else {
+              this.pendingIncomingCall = call;
+            }
+          });
+
+          this.peer.on('open', (myId) => {
+            this.log('Guest Peer registered on cloud', { hostPeerId: targetPeerId, myId });
+            connectToHost();
             resolve(true);
           });
 
           this.peer.on('error', (err) => {
             this.log('Guest Peer error', { type: err.type, error: err.message });
-            reject(err);
+            if (err.type === 'peer-unavailable' && retryCount < maxRetries) {
+              retryCount += 1;
+              this.log(`Host peer not available yet. Retrying in 2 seconds... (${retryCount}/${maxRetries})`);
+              if (connectionAttemptTimer) clearTimeout(connectionAttemptTimer);
+              connectionAttemptTimer = setTimeout(connectToHost, 2000);
+            } else {
+              reject(err);
+            }
           });
         }
       } catch (err) {
@@ -268,14 +345,16 @@ export class PeerRoomSignaler {
 
     conn.on('open', () => {
       this.log('Data connection open and confirmed active');
-      // Announce our presence to peer
+      // Announce our presence to peer with our actual entered display name!
       conn.send({
         event: 'peer-joined',
         data: {
+          isInitial: true,
           participant: {
             userId: this.user.id,
             displayName: this.user.displayName,
             isReady: this.isReady,
+            isOwner: this.isHost,
             cameraOn: true,
             micOn: false
           }
@@ -296,7 +375,31 @@ export class PeerRoomSignaler {
       this.log(`Data channel received: ${event}`, data);
 
       if (event === 'peer-joined') {
+        if (data?.participant) {
+          this.peerParticipant = data.participant;
+        }
+
+        // Emit locally so UI updates remoteParticipant state immediately
         this.emitLocal('peer-joined', data);
+
+        // If this was the initial announcement from peer, reply with our identity!
+        if (data?.isInitial) {
+          this.log('Responding with bidirectional identity packet to peer');
+          conn.send({
+            event: 'peer-joined',
+            data: {
+              isInitial: false,
+              participant: {
+                userId: this.user.id,
+                displayName: this.user.displayName,
+                isReady: this.isReady,
+                isOwner: this.isHost,
+                cameraOn: true,
+                micOn: false
+              }
+            }
+          });
+        }
         return;
       }
 
@@ -341,6 +444,7 @@ export class PeerRoomSignaler {
 
     conn.on('close', () => {
       this.log('Data connection closed');
+      this.peerParticipant = null;
       this.emitLocal('peer-disconnected');
     });
 
@@ -351,13 +455,26 @@ export class PeerRoomSignaler {
 
   disconnect() {
     this.log('Disconnecting PeerRoomSignaler session');
+    this.isDestroyed = true;
+    if (typeof window !== 'undefined' && this.unloadHandler) {
+      window.removeEventListener('beforeunload', this.unloadHandler);
+    }
     if (this.countdownTimer) {
       clearInterval(this.countdownTimer);
       this.countdownTimer = null;
     }
-    if (this.connection) this.connection.close();
-    if (this.mediaCall) this.mediaCall.close();
-    if (this.peer) this.peer.destroy();
+    if (this.connection) {
+      try { this.connection.close(); } catch (e) {}
+      this.connection = null;
+    }
+    if (this.mediaCall) {
+      try { this.mediaCall.close(); } catch (e) {}
+      this.mediaCall = null;
+    }
+    if (this.peer) {
+      try { this.peer.destroy(); } catch (e) {}
+      this.peer = null;
+    }
     this.listeners.clear();
   }
 }
