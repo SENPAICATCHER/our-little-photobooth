@@ -274,26 +274,36 @@ export default function LandingPage({
             Included Retro Frames & Scrapbook Themes
           </span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="retro-card p-3 text-center">
-            <span className="text-2xl block mb-1">🎀</span>
-            <span className="font-bold text-xs">Romantic Ribbon</span>
-            <p className="text-[10px] text-gray-500">Gingham & Rose</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+          <div className="retro-card p-2.5 text-center hover:scale-105 transition-transform">
+            <span className="text-2xl block mb-1">🎀✨</span>
+            <span className="font-bold text-xs block truncate">Cozy Lace & Bows</span>
+            <p className="text-[10px] text-gray-500">Knit & Organza</p>
           </div>
-          <div className="retro-card p-3 text-center">
-            <span className="text-2xl block mb-1">📼</span>
-            <span className="font-bold text-xs">90s Scrapbook</span>
-            <p className="text-[10px] text-gray-500">Kodak Gold & Cassette</p>
+          <div className="retro-card p-2.5 text-center hover:scale-105 transition-transform">
+            <span className="text-2xl block mb-1">🍂📜</span>
+            <span className="font-bold text-xs block truncate">Whispers of Wild</span>
+            <p className="text-[10px] text-gray-500">Aged Parchment</p>
           </div>
-          <div className="retro-card p-3 text-center">
-            <span className="text-2xl block mb-1">📺</span>
-            <span className="font-bold text-xs">Dual Vintage TV</span>
-            <p className="text-[10px] text-gray-500">Retro CRT Screens</p>
+          <div className="retro-card p-2.5 text-center hover:scale-105 transition-transform">
+            <span className="text-2xl block mb-1">📎📓</span>
+            <span className="font-bold text-xs block truncate">Safety Pin Grid</span>
+            <p className="text-[10px] text-gray-500">Crumpled Notebook</p>
           </div>
-          <div className="retro-card p-3 text-center">
-            <span className="text-2xl block mb-1">📷</span>
-            <span className="font-bold text-xs">Canon Digicam</span>
-            <p className="text-[10px] text-gray-500">2000s LCD Viewfinder</p>
+          <div className="retro-card p-2.5 text-center hover:scale-105 transition-transform">
+            <span className="text-2xl block mb-1">📰🎙️</span>
+            <span className="font-bold text-xs block truncate">Indie Noir Zine</span>
+            <p className="text-[10px] text-gray-500">Crinkled Paper & Mic</p>
+          </div>
+          <div className="retro-card p-2.5 text-center hover:scale-105 transition-transform">
+            <span className="text-2xl block mb-1">✨🍷</span>
+            <span className="font-bold text-xs block truncate">Starry Burgundy</span>
+            <p className="text-[10px] text-gray-500">Wine & Doodle Stars</p>
+          </div>
+          <div className="retro-card p-2.5 text-center hover:scale-105 transition-transform">
+            <span className="text-2xl block mb-1">📷✨</span>
+            <span className="font-bold text-xs block truncate">Canon Digicam</span>
+            <p className="text-[10px] text-gray-500">2000s Viewfinder</p>
           </div>
         </div>
       </section>

@@ -34,7 +34,9 @@ export default function PhotoboothRoom({
   const [cameraError, setCameraError] = useState('');
 
   // Photobooth Controls
-  const [selectedLayout, setSelectedLayout] = useState('side-by-side');
+  const [selectedLayout, setSelectedLayout] = useState('lace-bows');
+  const [showFrameModal, setShowFrameModal] = useState(false);
+  const [frameCategory, setFrameCategory] = useState('all');
   const [countdownDuration, setCountdownDuration] = useState(3);
   const [countdownRemaining, setCountdownRemaining] = useState(null);
   const [isFlashing, setIsFlashing] = useState(false);
@@ -575,6 +577,34 @@ export default function PhotoboothRoom({
           </div>
         )}
 
+        {/* ACTIVE FRAME SELECTION & STUDIO ACCESS */}
+        <div className="w-full mb-3 flex items-center justify-between gap-3 bg-[#FFFDF9] border-2 border-[#1E1B24] rounded-2xl px-4 py-2.5 shadow-[3px_3px_0px_#1E1B24]">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[#E9D5FF] border-2 border-[#1E1B24] flex items-center justify-center text-lg shadow-[1px_1px_0px_#1E1B24]">
+              {LAYOUT_CONFIGS[selectedLayout]?.badge || '🖼️'}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-700">Photo Frame Theme</span>
+                <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200">
+                  {LAYOUT_CONFIGS[selectedLayout]?.aspect || 'Duo'}
+                </span>
+              </div>
+              <span className="font-extrabold text-sm md:text-base text-[#1E1B24]">
+                {LAYOUT_CONFIGS[selectedLayout]?.name || selectedLayout}
+              </span>
+            </div>
+          </div>
+
+          <button
+            onClick={() => { playButtonPop(); setShowFrameModal(true); }}
+            className="retro-btn retro-btn-secondary text-xs py-2 px-3.5 font-bold flex items-center gap-1.5 cursor-pointer shadow-[2px_2px_0px_#1E1B24]"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+            <span>Choose Frame ({Object.keys(LAYOUT_CONFIGS).length})</span>
+          </button>
+        </div>
+
         {/* Dual Video Cards Container */}
         <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
           {/* LOCAL USER CAMERA (YOU) */}
@@ -682,20 +712,30 @@ export default function PhotoboothRoom({
       <footer className="max-w-6xl mx-auto w-full bg-[#FFFDF9] border-2 border-[#1E1B24] rounded-2xl p-4 shadow-[4px_4px_0px_#1E1B24] space-y-4 relative z-10">
         {/* Layout Selector Bar */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
-          <span className="text-[11px] font-bold text-gray-500 uppercase flex-shrink-0 mr-1">
-            Layout:
+          <button
+            onClick={() => { playButtonPop(); setShowFrameModal(true); }}
+            className="flex-shrink-0 px-3.5 py-1.5 rounded-xl border-2 text-xs font-bold transition-all cursor-pointer bg-[#FEF08A] border-[#1E1B24] text-[#1E1B24] shadow-[2px_2px_0px_#1E1B24] flex items-center gap-1.5 hover:scale-105 active:scale-95"
+          >
+            <span>🎨</span>
+            <span>All Frames ({Object.keys(LAYOUT_CONFIGS).length})</span>
+          </button>
+
+          <span className="text-[11px] font-bold text-gray-400 uppercase flex-shrink-0">
+            |
           </span>
+
           {Object.entries(LAYOUT_CONFIGS).map(([key, config]) => (
             <button
               key={key}
               onClick={() => handleLayoutSelect(key)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-xl border-2 text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-shrink-0 px-3 py-1.5 rounded-xl border-2 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                 selectedLayout === key
-                  ? 'bg-[#E9D5FF] border-[#1E1B24] shadow-[2px_2px_0px_#1E1B24]'
+                  ? 'bg-[#E9D5FF] border-[#1E1B24] shadow-[2px_2px_0px_#1E1B24] text-[#1E1B24]'
                   : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400'
               }`}
             >
-              {config.name}
+              <span>{config.badge || '📷'}</span>
+              <span>{config.name}</span>
             </button>
           ))}
         </div>
@@ -782,6 +822,117 @@ export default function PhotoboothRoom({
           </div>
         </div>
       </footer>
+
+      {/* RETRO FRAME STUDIO MODAL */}
+      {showFrameModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="retro-card max-w-4xl w-full max-h-[90vh] flex flex-col bg-[#FFFDF9] relative p-4 sm:p-6 overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 sm:pb-4 border-b-2 border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#E9D5FF] border-2 border-[#1E1B24] flex items-center justify-center text-xl shadow-[2px_2px_0px_#1E1B24]">
+                  🎨
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg sm:text-xl text-[#1E1B24]">Retro Frame Studio</h3>
+                  <p className="text-xs text-gray-500">Pick a frame together before snapping your photobooth photos</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { playButtonPop(); setShowFrameModal(false); }}
+                className="p-1.5 rounded-full hover:bg-gray-100 border border-black/20 cursor-pointer"
+              >
+                <X className="w-5 h-5 text-gray-700" />
+              </button>
+            </div>
+
+            {/* Category Filter Tabs */}
+            <div className="flex items-center gap-2 py-3 overflow-x-auto scrollbar-thin">
+              {['all', 'Scrapbook', 'Parchment', 'Notebook', 'Indie Zine', 'Vintage', 'Y2K Digicam', 'Classic Duo'].map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => { playButtonPop(); setFrameCategory(cat); }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border-2 transition-all cursor-pointer flex-shrink-0 ${
+                    frameCategory === cat
+                      ? 'bg-[#E9D5FF] border-[#1E1B24] shadow-[2px_2px_0px_#1E1B24]'
+                      : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400'
+                  }`}
+                >
+                  {cat === 'all' ? '★ All Frames' : cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Grid of Frame Cards */}
+            <div className="flex-1 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 p-1 scrollbar-thin">
+              {Object.entries(LAYOUT_CONFIGS)
+                .filter(([_, cfg]) => frameCategory === 'all' || cfg.category === frameCategory)
+                .map(([key, config]) => {
+                  const isSelected = selectedLayout === key;
+                  return (
+                    <div
+                      key={key}
+                      onClick={() => {
+                        handleLayoutSelect(key);
+                        setShowFrameModal(false);
+                      }}
+                      className={`retro-card p-3 flex flex-col justify-between cursor-pointer transition-all hover:scale-[1.02] ${
+                        isSelected
+                          ? 'border-4 border-[#9333EA] bg-[#FAF5FF] shadow-[4px_4px_0px_#9333EA]'
+                          : 'border-2 border-[#1E1B24] hover:shadow-[4px_4px_0px_#1E1B24]'
+                      }`}
+                    >
+                      {/* Frame Preview Image or Graphical Placeholder */}
+                      <div className="relative aspect-3/4 rounded-xl overflow-hidden bg-gray-900 border-2 border-[#1E1B24] mb-2.5 flex items-center justify-center">
+                        {config.frameAsset ? (
+                          <img
+                            src={config.frameAsset}
+                            alt={config.name}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-[#2A1B3D] flex flex-col items-center justify-center text-white p-2 text-center">
+                            <span className="text-4xl mb-2">{config.badge || '📷'}</span>
+                            <span className="font-pixel text-xs text-[#FDE047]">{config.aspect}</span>
+                          </div>
+                        )}
+                        <span className="absolute top-2 right-2 bg-black/75 backdrop-blur-xs text-white text-[10px] font-mono px-2 py-0.5 rounded-full">
+                          {config.aspect}
+                        </span>
+                        {isSelected && (
+                          <div className="absolute top-2 left-2 bg-[#9333EA] text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow">
+                            <Check className="w-3 h-3" /> Selected
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Info & Button */}
+                      <div>
+                        <div className="font-extrabold text-sm text-[#1E1B24] mb-0.5 flex items-center justify-between">
+                          <span>{config.name}</span>
+                        </div>
+                        <p className="text-[11px] text-gray-500 line-clamp-2 mb-2">
+                          {config.description || 'Retro photobooth frame layout'}
+                        </p>
+                        <button
+                          type="button"
+                          className={`w-full py-1.5 rounded-xl text-xs font-bold border-2 transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#9333EA] text-white border-[#1E1B24] shadow-[1px_1px_0px_#1E1B24]'
+                              : 'bg-white hover:bg-gray-100 text-[#1E1B24] border-[#1E1B24]'
+                          }`}
+                        >
+                          {isSelected ? '✓ Frame Active' : 'Select Frame'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

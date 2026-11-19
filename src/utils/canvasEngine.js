@@ -1,5 +1,27 @@
 // Virtual Photobooth Image Composition Engine for HTML5 Canvas
 
+// In-memory image cache for fast frame rendering
+const frameImageCache = new Map();
+
+export async function loadFrameImage(src) {
+  if (!src) return null;
+  if (frameImageCache.has(src)) {
+    return frameImageCache.get(src);
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      frameImageCache.set(src, img);
+      resolve(img);
+    };
+    img.onerror = () => {
+      resolve(null);
+    };
+    img.src = src;
+  });
+}
+
 // Helper: Check if video element is ready with frame dimensions to draw on canvas
 export function isVideoReadyToDraw(video) {
   if (!video) return false;
@@ -66,51 +88,122 @@ export function drawDisconnectedPlaceholder(ctx, dx, dy, dWidth, dHeight, name =
 
 // Layout Dimensions Preset (High-Resolution Output for printing & crisp sharing: 1200x1600 or 1200x1200)
 export const LAYOUT_CONFIGS = {
-  'side-by-side': {
-    name: 'Side-by-Side Classic',
-    width: 1400,
-    height: 1050,
-    aspect: '4:3'
+  'lace-bows': {
+    name: '🎀 Cozy Lace & Bows',
+    badge: '🎀✨',
+    category: 'Scrapbook',
+    width: 735,
+    height: 1105,
+    aspect: '2:3',
+    frameAsset: '/assets/frames/frame-lace-bows.jpg',
+    description: 'Knit sweater, lace ribbons, black organza bows & baby\'s breath'
   },
-  'vertical-split': {
-    name: 'Vertical Split',
-    width: 1000,
-    height: 1400,
-    aspect: '5:7'
-  },
-  'classic-strip': {
-    name: '4-Frame Photobooth Strip',
-    width: 600,
-    height: 1800,
-    aspect: '1:3'
-  },
-  'scrapbook': {
-    name: 'Vintage Scrapbook Collage',
-    width: 1200,
-    height: 1600,
+  'whispers-wild': {
+    name: '🍂 Whispers of the Wild',
+    badge: '🍂📜',
+    category: 'Parchment',
+    width: 736,
+    height: 980,
     aspect: '3:4',
-    frameAsset: '/assets/frames/frame-scrapbook.jpg'
+    frameAsset: '/assets/frames/frame-whispers-wild.jpg',
+    description: 'Coffee-stained parchment, torn washi tape & botanical notes'
   },
-  'vintage-tv': {
-    name: 'Dual Vintage TV',
-    width: 1200,
-    height: 1700,
-    aspect: '9:13',
-    frameAsset: '/assets/frames/frame-tv.jpg'
+  'grid-notebook': {
+    name: '📎 Safety Pin Grid Notes',
+    badge: '📎📓',
+    category: 'Notebook',
+    width: 675,
+    height: 1200,
+    aspect: '9:16',
+    frameAsset: '/assets/frames/frame-grid-notebook.jpg',
+    description: 'Crumpled grid paper, safety pin, vintage camera & burgundy paper'
+  },
+  'noir-zine': {
+    name: '📰 Indie Noir Zine',
+    badge: '📰🎙️',
+    category: 'Indie Zine',
+    width: 675,
+    height: 1200,
+    aspect: '9:16',
+    frameAsset: '/assets/frames/frame-noir-zine.jpg',
+    description: 'Crinkled black paper, torn burgundy background & 35mm camera'
+  },
+  'burgundy-stars': {
+    name: '✨ Starry Burgundy Night',
+    badge: '✨🍷',
+    category: 'Vintage',
+    width: 675,
+    height: 1200,
+    aspect: '9:16',
+    frameAsset: '/assets/frames/frame-burgundy-stars.jpg',
+    description: 'Deep burgundy wine, doodle stars, Polaroid snapshots & 35mm camera'
   },
   'romantic-ribbon': {
-    name: 'Romantic Ribbon & Gingham',
+    name: '🌹 Romantic Ribbon',
+    badge: '🎀',
+    category: 'Birthday Gift',
     width: 1080,
     height: 1440,
     aspect: '3:4',
-    frameAsset: '/assets/frames/frame-romantic-ribbon.jpg'
+    frameAsset: '/assets/frames/frame-romantic-ribbon.jpg',
+    description: 'Red gingham ribbon, satin bow, lily and golden love note'
   },
   'digicam-viewfinder': {
-    name: 'Canon Digicam Viewfinder',
+    name: '📷 Canon Digicam 2000s',
+    badge: '📷',
+    category: 'Y2K Digicam',
     width: 1080,
     height: 1920,
     aspect: '9:16',
-    frameAsset: '/assets/frames/frame-digicam.jpg'
+    frameAsset: '/assets/frames/frame-digicam.jpg',
+    description: 'Silver LCD viewfinder, REC indicator & metallic chrome stars'
+  },
+  'vintage-tv': {
+    name: '📺 Dual Vintage TV',
+    badge: '📺',
+    category: 'Retro CRT',
+    width: 1200,
+    height: 1700,
+    aspect: '9:13',
+    frameAsset: '/assets/frames/frame-tv.jpg',
+    description: 'Dual olive-green CRT screens with knobs and antenna'
+  },
+  'scrapbook': {
+    name: '📼 Vintage Scrapbook',
+    badge: '📼',
+    category: 'Scrapbook',
+    width: 1200,
+    height: 1600,
+    aspect: '3:4',
+    frameAsset: '/assets/frames/frame-scrapbook.jpg',
+    description: 'Deckled torn paper, Kodak gold and cassette tape'
+  },
+  'side-by-side': {
+    name: '♡ Side-by-Side Classic',
+    badge: '♡',
+    category: 'Classic Duo',
+    width: 1400,
+    height: 1050,
+    aspect: '4:3',
+    description: 'Warm retro cream textured duo cards'
+  },
+  'vertical-split': {
+    name: '📼 Vertical Split',
+    badge: '📼',
+    category: 'Classic Duo',
+    width: 1000,
+    height: 1400,
+    aspect: '5:7',
+    description: 'Stacked duo frames with cute washi tape divider'
+  },
+  'classic-strip': {
+    name: '🎞️ 4-Frame Classic Strip',
+    badge: '🎞️',
+    category: 'Photobooth Strip',
+    width: 600,
+    height: 1800,
+    aspect: '1:3',
+    description: 'Classic vertical 4-shot photobooth strip'
   }
 };
 
@@ -430,5 +523,338 @@ export async function renderLayoutToCanvas({
     ctx.fillText('[||||] 100%', screenX + screenW - 85, screenY + 25);
     ctx.fillStyle = '#F97316';
     ctx.fillText("'99 11 12", screenX + 15, screenY + screenH - 15);
+
+  } else if (layoutId === 'lace-bows') {
+    // 🎀 Cozy Lace & Bows (Reference 🎀✨.jpg)
+    const frameImg = await loadFrameImage(config.frameAsset);
+    if (frameImg) {
+      ctx.drawImage(frameImg, 0, 0, w, h);
+    } else {
+      ctx.fillStyle = '#3E2723';
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    // Photo Area inside the central scalloped card:
+    const slotW = 395;
+    const slotH = 225;
+    const slotX = (w - slotW) / 2;
+    const slotY1 = 280;
+    const slotY2 = 530;
+
+    // Top Photo Card (Local User)
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = '#FAF5EF';
+    ctx.fillRect(slotX - 4, slotY1 - 4, slotW + 8, slotH + 8);
+    ctx.restore();
+
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(slotX, slotY1, slotW, slotH);
+    drawCover(ctx, localVideo, slotX, slotY1, slotW, slotH, isLocalMirrored);
+
+    // Label tag
+    ctx.fillStyle = 'rgba(30, 27, 36, 0.8)';
+    ctx.fillRect(slotX + 10, slotY1 + slotH - 32, 130, 24);
+    ctx.fillStyle = '#FAF5EF';
+    ctx.font = 'bold 16px "Space Grotesk", sans-serif';
+    ctx.fillText('♡ ' + localName, slotX + 18, slotY1 + slotH - 15);
+
+    // Bottom Photo Card (Remote Partner)
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = '#FAF5EF';
+    ctx.fillRect(slotX - 4, slotY2 - 4, slotW + 8, slotH + 8);
+    ctx.restore();
+
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(slotX, slotY2, slotW, slotH);
+    if (isVideoReadyToDraw(remoteVideo)) {
+      drawCover(ctx, remoteVideo, slotX, slotY2, slotW, slotH, isRemoteMirrored);
+    } else {
+      drawDisconnectedPlaceholder(ctx, slotX, slotY2, slotW, slotH, remoteName);
+    }
+
+    // Label tag
+    ctx.fillStyle = 'rgba(30, 27, 36, 0.8)';
+    ctx.fillRect(slotX + 10, slotY2 + slotH - 32, 130, 24);
+    ctx.fillStyle = '#FAF5EF';
+    ctx.font = 'bold 16px "Space Grotesk", sans-serif';
+    ctx.fillText('♡ ' + remoteName, slotX + 18, slotY2 + slotH - 15);
+
+    // Lace ribbon separator
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.fillRect(slotX + 30, slotY1 + slotH + 8, slotW - 60, 4);
+
+  } else if (layoutId === 'whispers-wild') {
+    // 🍂 Whispers of the Wild (Reference Whispers of the Wild.jpg)
+    const frameImg = await loadFrameImage(config.frameAsset);
+    if (frameImg) {
+      ctx.drawImage(frameImg, 0, 0, w, h);
+    } else {
+      ctx.fillStyle = '#8D6E63';
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    // Two stacked Polaroid cards on parchment
+    const cardW = 420;
+    const cardH = 295;
+    const cardX = (w - cardW) / 2;
+    const cardY1 = 185;
+    const cardY2 = 505;
+
+    // Card 1 (Local)
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 4;
+    ctx.fillStyle = '#FFFDF9';
+    ctx.fillRect(cardX, cardY1, cardW, cardH);
+    ctx.restore();
+
+    const photoPad = 12;
+    const photoH = cardH - 52;
+    ctx.fillStyle = '#1A181B';
+    ctx.fillRect(cardX + photoPad, cardY1 + photoPad, cardW - photoPad * 2, photoH);
+    drawCover(ctx, localVideo, cardX + photoPad, cardY1 + photoPad, cardW - photoPad * 2, photoH, isLocalMirrored);
+
+    // Handwritten chin note
+    ctx.font = 'bold 24px "Caveat", cursive';
+    ctx.fillStyle = '#2A2018';
+    ctx.textAlign = 'center';
+    ctx.fillText(localName + ' ♡ ' + dateStr, cardX + cardW / 2, cardY1 + cardH - 14);
+
+    // Tape top-left
+    ctx.fillStyle = 'rgba(214, 180, 140, 0.65)';
+    ctx.fillRect(cardX - 10, cardY1 - 8, 70, 22);
+
+    // Card 2 (Remote)
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 4;
+    ctx.fillStyle = '#FFFDF9';
+    ctx.fillRect(cardX, cardY2, cardW, cardH);
+    ctx.restore();
+
+    ctx.fillStyle = '#1A181B';
+    ctx.fillRect(cardX + photoPad, cardY2 + photoPad, cardW - photoPad * 2, photoH);
+    if (isVideoReadyToDraw(remoteVideo)) {
+      drawCover(ctx, remoteVideo, cardX + photoPad, cardY2 + photoPad, cardW - photoPad * 2, photoH, isRemoteMirrored);
+    } else {
+      drawDisconnectedPlaceholder(ctx, cardX + photoPad, cardY2 + photoPad, cardW - photoPad * 2, photoH, remoteName);
+    }
+
+    ctx.font = 'bold 24px "Caveat", cursive';
+    ctx.fillStyle = '#2A2018';
+    ctx.textAlign = 'center';
+    ctx.fillText(remoteName + ' ♡ forever and always', cardX + cardW / 2, cardY2 + cardH - 14);
+
+    // Tape top-right
+    ctx.fillStyle = 'rgba(214, 180, 140, 0.65)';
+    ctx.fillRect(cardX + cardW - 60, cardY2 - 8, 70, 22);
+
+  } else if (layoutId === 'grid-notebook') {
+    // 📎 Safety Pin Grid Notes (Reference download (8).jpg)
+    const frameImg = await loadFrameImage(config.frameAsset);
+    if (frameImg) {
+      ctx.drawImage(frameImg, 0, 0, w, h);
+    } else {
+      ctx.fillStyle = '#4A0E17';
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    // Position two photo cards on the crumpled grid paper
+    const cardW = 435;
+    const cardH = 310;
+    const cardX = 110;
+    const cardY1 = 175;
+    const cardY2 = 520;
+
+    // Card 1 (Local)
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 4;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(cardX - 6, cardY1 - 6, cardW + 12, cardH + 12);
+    ctx.restore();
+
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(cardX, cardY1, cardW, cardH);
+    drawCover(ctx, localVideo, cardX, cardY1, cardW, cardH, isLocalMirrored);
+
+    // Yellow translucent tape
+    ctx.fillStyle = 'rgba(254, 240, 138, 0.75)';
+    ctx.fillRect(cardX - 16, cardY1 - 10, 65, 20);
+
+    // Typewriter label
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(cardX + 12, cardY1 + cardH - 32, 140, 24);
+    ctx.font = 'bold 16px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText('📸 ' + localName, cardX + 20, cardY1 + cardH - 15);
+
+    // Card 2 (Remote)
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 4;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(cardX - 6, cardY2 - 6, cardW + 12, cardH + 12);
+    ctx.restore();
+
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(cardX, cardY2, cardW, cardH);
+    if (isVideoReadyToDraw(remoteVideo)) {
+      drawCover(ctx, remoteVideo, cardX, cardY2, cardW, cardH, isRemoteMirrored);
+    } else {
+      drawDisconnectedPlaceholder(ctx, cardX, cardY2, cardW, cardH, remoteName);
+    }
+
+    // Yellow translucent tape
+    ctx.fillStyle = 'rgba(254, 240, 138, 0.75)';
+    ctx.fillRect(cardX + cardW - 50, cardY2 - 10, 65, 20);
+
+    // Typewriter label
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(cardX + 12, cardY2 + cardH - 32, 140, 24);
+    ctx.font = 'bold 16px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText('📸 ' + remoteName, cardX + 20, cardY2 + cardH - 15);
+
+    // Bottom grid stamp
+    ctx.font = 'bold 22px "VT323", monospace';
+    ctx.fillStyle = '#DC2626';
+    ctx.fillText(`'${dateStr.slice(-2)} PHOTO ARCHIVE ● REC`, cardX + 20, cardY2 + cardH + 42);
+
+  } else if (layoutId === 'noir-zine') {
+    // 📰 Indie Noir Zine (Reference download (10).jpg)
+    const frameImg = await loadFrameImage(config.frameAsset);
+    if (frameImg) {
+      ctx.drawImage(frameImg, 0, 0, w, h);
+    } else {
+      ctx.fillStyle = '#1A181B';
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    const cardW = 440;
+    const cardH = 265;
+    const cardX = 95;
+    const cardY1 = 245;
+    const cardY2 = 535;
+
+    // Slot 1 (Local)
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(cardX - 4, cardY1 - 4, cardW + 8, cardH + 8);
+    ctx.restore();
+
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(cardX, cardY1, cardW, cardH);
+    drawCover(ctx, localVideo, cardX, cardY1, cardW, cardH, isLocalMirrored);
+
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(cardX + 12, cardY1 + 12, 130, 22);
+    ctx.font = 'bold 14px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#FDE047';
+    ctx.fillText('SIDE A // ' + localName, cardX + 18, cardY1 + 28);
+
+    // Slot 2 (Remote)
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(cardX - 4, cardY2 - 4, cardW + 8, cardH + 8);
+    ctx.restore();
+
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(cardX, cardY2, cardW, cardH);
+    if (isVideoReadyToDraw(remoteVideo)) {
+      drawCover(ctx, remoteVideo, cardX, cardY2, cardW, cardH, isRemoteMirrored);
+    } else {
+      drawDisconnectedPlaceholder(ctx, cardX, cardY2, cardW, cardH, remoteName);
+    }
+
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(cardX + 12, cardY2 + 12, 130, 22);
+    ctx.font = 'bold 14px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#FDE047';
+    ctx.fillText('SIDE B // ' + remoteName, cardX + 18, cardY2 + 28);
+
+    // Zine headline
+    ctx.font = '22px "VT323", monospace';
+    ctx.fillStyle = '#F3F4F6';
+    ctx.textAlign = 'center';
+    ctx.fillText('★ RETRO PHOTO ARCHIVE ★ ' + dateStr, w / 2, cardY2 + cardH + 42);
+
+  } else if (layoutId === 'burgundy-stars') {
+    // ✨ Starry Burgundy Night (Reference download (9).jpg)
+    const frameImg = await loadFrameImage(config.frameAsset);
+    if (frameImg) {
+      ctx.drawImage(frameImg, 0, 0, w, h);
+    } else {
+      ctx.fillStyle = '#4A0E17';
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    const cardW = 460;
+    const cardH = 295;
+    const cardX = (w - cardW) / 2;
+    const cardY1 = 145;
+    const cardY2 = 465;
+
+    // Polaroid 1 (Local)
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 4;
+    ctx.fillStyle = '#FFFDF9';
+    ctx.fillRect(cardX, cardY1, cardW, cardH);
+    ctx.restore();
+
+    const photoPad = 12;
+    const photoH = cardH - 52;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(cardX + photoPad, cardY1 + photoPad, cardW - photoPad * 2, photoH);
+    drawCover(ctx, localVideo, cardX + photoPad, cardY1 + photoPad, cardW - photoPad * 2, photoH, isLocalMirrored);
+
+    ctx.font = 'bold 26px "Caveat", cursive';
+    ctx.fillStyle = '#1F161A';
+    ctx.textAlign = 'center';
+    ctx.fillText(localName + ' ✨ ' + dateStr, cardX + cardW / 2, cardY1 + cardH - 16);
+
+    // Polaroid 2 (Remote)
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 4;
+    ctx.fillStyle = '#FFFDF9';
+    ctx.fillRect(cardX, cardY2, cardW, cardH);
+    ctx.restore();
+
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(cardX + photoPad, cardY2 + photoPad, cardW - photoPad * 2, photoH);
+    if (isVideoReadyToDraw(remoteVideo)) {
+      drawCover(ctx, remoteVideo, cardX + photoPad, cardY2 + photoPad, cardW - photoPad * 2, photoH, isRemoteMirrored);
+    } else {
+      drawDisconnectedPlaceholder(ctx, cardX + photoPad, cardY2 + photoPad, cardW - photoPad * 2, photoH, remoteName);
+    }
+
+    ctx.font = 'bold 26px "Caveat", cursive';
+    ctx.fillStyle = '#1F161A';
+    ctx.textAlign = 'center';
+    ctx.fillText(remoteName + ' 💋 forever', cardX + cardW / 2, cardY2 + cardH - 16);
+
+    // Starry footer caption
+    ctx.font = 'bold 24px "Caveat", cursive';
+    ctx.fillStyle = '#FDE047';
+    ctx.textAlign = 'center';
+    ctx.fillText('under the same stars ♡', w / 2, cardY2 + cardH + 45);
   }
 }
